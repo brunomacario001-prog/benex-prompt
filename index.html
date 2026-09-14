@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Terminal Privado | BeneX</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+
+            min-height: 100vh;
+
+            background: #0d1117;
+            color: #c9d1d9;
+
+            font-family: "Courier New", monospace;
+        }
+
+        #terminal {
+            width: 100%;
+            max-width: 1000px;
+
+            margin: 40px auto;
+            padding: 20px;
+
+            background: #161b22;
+
+            border: 1px solid #30363d;
+            border-radius: 8px;
+
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+
+            cursor: text;
+        }
+
+        #titulo {
+            color: #58a6ff;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        #historico {
+            min-height: 300px;
+            max-height: 600px;
+
+            overflow-y: auto;
+
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+
+            line-height: 1.5;
+
+            margin-bottom: 12px;
+        }
+
+        #historico::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #historico::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .linha {
+            display: flex;
+            align-items: flex-start;
+            flex-wrap: wrap;
+
+            margin: 3px 0;
+        }
+
+        .prompt {
+            color: #3fb950;
+            font-weight: bold;
+            margin-right: 8px;
+
+            white-space: nowrap;
+        }
+
+        .comando {
+            color: #f0f6fc;
+        }
+
+        .saida {
+            color: #c9d1d9;
+        }
+
+        .erro {
+            color: #f85149;
+        }
+
+        .info {
+            color: #8b949e;
+        }
+
+        #linha-input {
+            display: flex;
+            align-items: center;
+        }
+
+        #inputTerminal {
+            flex: 1;
+
+            min-width: 100px;
+
+            background: transparent;
+
+            border: none;
+            outline: none;
+
+            color: #f0f6fc;
+
+            font-family: inherit;
+            font-size: inherit;
+        }
+
+        #loading {
+            display: none;
+
+            margin-top: 8px;
+
+            color: #8b949e;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="terminal">
+
+    <div id="titulo">
+        BeneX | Terminal Administrativo Privado
+    </div>
+
+    <div id="historico"></div>
+
+    <div id="linha-input">
+
+        <span
+            id="labelPrompt"
+            class="prompt"
+        >
+            [AUTENTICAÇÃO] Chave:
+        </span>
+
+        <input
+            id="inputTerminal"
+            type="password"
+            autocomplete="off"
+            autofocus
+        >
+
+    </div>
+
+    <div id="loading">
+        executando...
+    </div>
+
+</div>
+
+
+<script>
+
+    const API_URL =
+        "https://api.benex.net.br/executar";
+
+
+    const terminal =
+        document.getElementById("terminal");
+
+    const historico =
+        document.getElementById("historico");
+
+    const input =
+        document.getElementById("inputTerminal");
+
+    const labelPrompt =
+        document.getElementById("labelPrompt");
+
+    const loading =
+        document.getElementById("loading");
+
+
+    let tokenAcesso = "";
+
+    let diretorioAtual = ".";
+
+    let diretorioExibicao = "~";
+
+    let historicoComandos = [];
+
+    let posicaoHistorico = -1;
+
+
+    function adicionarTexto(
+        texto,
+        classe = ""
+    ) {
+
+        const linha =
+            document.createElement("div");
+
+        if (classe) {
+            linha.className = classe;
+        }
+
+        linha.textContent = texto;
+
+        historico.appendChild(linha);
+
+        historico.scrollTop =
+            historico.scrollHeight;
+    }
+
+
+    function adicionarComando(
+        comando
+    ) {
+
+        const linha =
+            document.createElement("div");
+
+        linha.className = "linha";
+
+
+        const prompt =
+            document.createElement("span");
+
+        prompt.className = "prompt";
+
+        prompt.textContent =
+            `benex@servidor:${diretorioExibicao}$`;
+
+
+        const texto =
+            document.createElement("span");
+
+        texto.className = "comando";
+
+        texto.textContent = comando;
+
+
+        linha.appendChild(prompt);
+
+        linha.appendChild(texto);
+
+        historico.appendChild(linha);
+
+        historico.scrollTop =
+            historico.scrollHeight;
+    }
+
+
+    function atualizarPrompt() {
+
+        labelPrompt.textContent =
+            `benex@servidor:${diretorioExibicao}$`;
+    }
+
+
+    function resetarAutenticacao() {
+
+        tokenAcesso = "";
+
+        input.type = "password";
+
+        labelPrompt.textContent =
+            "[AUTENTICAÇÃO] Chave:";
+
+        adicionarTexto(
+            "Sessão inválida. Digite novamente sua chave.",
+            "erro"
+        );
+    }
+
+
+    terminal.addEventListener(
+        "click",
+        () => input.focus()
+    );
+
+
+    input.addEventListener(
+        "keydown",
+        async function (evento) {
+
+            /*
+             * HISTÓRICO ↑ ↓
+             */
+
+            if (
+                tokenAcesso &&
+                (
+                    evento.key === "ArrowUp" ||
+                    evento.key === "ArrowDown"
+                )
+            ) {
+
+                evento.preventDefault();
+
+
+                if (
+                    historicoComandos.length === 0
+                ) {
+                    return;
+                }
+
+
+                if (
+                    evento.key === "ArrowUp"
+                ) {
+
+                    if (
+                        posicaoHistorico <
+                        historicoComandos.length - 1
+                    ) {
+
+                        posicaoHistorico++;
+                    }
+
+                }
+
+
+                if (
+                    evento.key === "ArrowDown"
+                ) {
+
+                    if (
+                        posicaoHistorico > -1
+                    ) {
+
+                        posicaoHistorico--;
+                    }
+
+                }
+
+
+                if (
+                    posicaoHistorico === -1
+                ) {
+
+                    input.value = "";
+
+                } else {
+
+                    input.value =
+                        historicoComandos[
+                            historicoComandos.length -
+                            1 -
+                            posicaoHistorico
+                        ];
+
+                }
+
+                return;
+            }
+
+
+            /*
+             * ENTER
+             */
+
+            if (
+                evento.key !== "Enter"
+            ) {
+                return;
+            }
+
+
+            const valor =
+                input.value.trim();
+
+
+            if (!valor) {
+                return;
+            }
+
+
+            /*
+             * PRIMEIRA ENTRADA:
+             * CHAVE
+             */
+
+            if (!tokenAcesso) {
+
+                tokenAcesso = valor;
+
+                input.value = "";
+
+                input.type = "text";
+
+                atualizarPrompt();
+
+
+                adicionarTexto(
+                    "Chave carregada somente nesta sessão.",
+                    "info"
+                );
+
+                return;
+            }
+
+
+            /*
+             * CLEAR
+             */
+
+            if (
+                valor.toLowerCase() === "clear" ||
+                valor.toLowerCase() === "cls"
+            ) {
+
+                historico.innerHTML = "";
+
+                input.value = "";
+
+                return;
+            }
+
+
+            adicionarComando(valor);
+
+
+            historicoComandos.push(valor);
+
+            posicaoHistorico = -1;
+
+            input.value = "";
+
+            input.disabled = true;
+
+            loading.style.display =
+                "block";
+
+
+            try {
+
+                const resposta =
+                    await fetch(
+                        API_URL,
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify({
+                                token:
+                                    tokenAcesso,
+
+                                comando:
+                                    valor,
+
+                                diretorio:
+                                    diretorioAtual
+                            })
+                        }
+                    );
+
+
+                let dados;
+
+
+                try {
+
+                    dados =
+                        await resposta.json();
+
+                } catch {
+
+                    throw new Error(
+                        "Resposta inválida do servidor."
+                    );
+                }
+
+
+                /*
+                 * SUCESSO
+                 */
+
+                if (resposta.ok) {
+
+                    if (
+                        dados.diretorio !==
+                        undefined
+                    ) {
+
+                        diretorioAtual =
+                            dados.diretorio;
+
+
+                        if (
+                            diretorioAtual === "." ||
+                            diretorioAtual === ""
+                        ) {
+
+                            diretorioExibicao =
+                                "~";
+
+                        } else {
+
+                            const partes =
+                                diretorioAtual
+                                    .replaceAll("\\", "/")
+                                    .split("/");
+
+
+                            diretorioExibicao =
+                                partes[
+                                    partes.length - 1
+                                ] || "~";
+                        }
+
+
+                        atualizarPrompt();
+                    }
+
+
+                    if (dados.saida) {
+
+                        adicionarTexto(
+                            dados.saida,
+                            "saida"
+                        );
+
+                    }
+
+                    return;
+                }
+
+
+                /*
+                 * FASTAPI usa "detail"
+                 */
+
+                const mensagem =
+                    dados.detail ||
+                    dados.erro ||
+                    dados.saida ||
+                    "Erro desconhecido.";
+
+
+                /*
+                 * CHAVE INVÁLIDA
+                 */
+
+                if (
+                    resposta.status === 403 &&
+                    mensagem === "Acesso negado."
+                ) {
+
+                    resetarAutenticacao();
+
+                    return;
+                }
+
+
+                adicionarTexto(
+                    mensagem,
+                    "erro"
+                );
+
+
+            } catch (erro) {
+
+                adicionarTexto(
+                    "Não foi possível conectar à API BeneX.",
+                    "erro"
+                );
+
+            } finally {
+
+                input.disabled = false;
+
+                loading.style.display =
+                    "none";
+
+                input.focus();
+            }
+
+        }
+    );
+
+
+    adicionarTexto(
+        "Terminal protegido BeneX iniciado.",
+        "info"
+    );
+
+</script>
+
+</body>
+</html>
