@@ -392,22 +392,72 @@
 
             if (!tokenAcesso) {
 
-                tokenAcesso = valor;
+    async function gerarSHA256(texto) {
 
-                input.value = "";
+        const dados =
+            new TextEncoder().encode(texto);
 
-                input.type = "text";
+        const hashBuffer =
+            await crypto.subtle.digest(
+                "SHA-256",
+                dados
+            );
 
-                atualizarPrompt();
+        const hashArray =
+            Array.from(
+                new Uint8Array(hashBuffer)
+            );
+
+        return hashArray
+            .map(
+                byte =>
+                    byte
+                        .toString(16)
+                        .padStart(2, "0")
+            )
+            .join("");
+    }
 
 
-                adicionarTexto(
-                    "Chave carregada somente nesta sessão.",
-                    "info"
-                );
+    const HASH_CORRETO =
+        "54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
 
-                return;
-            }
+
+    const hashDigitado =
+        await gerarSHA256(valor);
+
+
+    if (
+        hashDigitado !== HASH_CORRETO
+    ) {
+
+        input.value = "";
+
+        adicionarTexto(
+            "Chave administrativa inválida.",
+            "erro"
+        );
+
+        return;
+    }
+
+
+    tokenAcesso = valor;
+
+    input.value = "";
+
+    input.type = "text";
+
+    atualizarPrompt();
+
+
+    adicionarTexto(
+        "Autenticação administrativa concluída.",
+        "info"
+    );
+
+    return;
+}
 
 
             /*
