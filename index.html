@@ -1,262 +1,30 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal Privado | BeneX</title>
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
-
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-            background: #0d1117;
-            color: #c9d1d9;
-            font-family: "Courier New", monospace;
-        }
-        #terminal-box {
-            width: 100%;
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 20px;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            box-shadow: 0 8px 30px rgba(0,0,0,.45);
-        }
-        #titulo {
-            color: #58a6ff;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-        #auth {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        #auth label {
-            color: #3fb950;
-            font-weight: bold;
-            white-space: nowrap;
-        }
-        #chave {
-            flex: 1;
-            min-width: 100px;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: #f0f6fc;
-            font: inherit;
-        }
-        #status {
-            margin: 10px 0;
-            color: #8b949e;
-            white-space: pre-wrap;
-        }
-        #xterm-container {
-            display: none;
-            height: 520px;
-            overflow: hidden;
-        }
-        #fallback {
-            display: none;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #30363d;
-        }
-        #fallback-output {
-            min-height: 100px;
-            max-height: 240px;
-            overflow: auto;
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-        }
-        #fallback-line {
-            display: flex;
-            gap: 8px;
-            margin-top: 8px;
-        }
-        #fallback-input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: #f0f6fc;
-            font: inherit;
-        }
-        .erro { color: #f85149 !important; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Painel Administrativo | BeneX</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<style>
+*{box-sizing:border-box} body{margin:0;min-height:100vh;background:#0d1117;color:#c9d1d9;font-family:Arial,sans-serif}.app{display:flex;min-height:100vh}.sidebar{width:230px;background:#161b22;border-right:1px solid #30363d;padding:24px 14px;position:fixed;inset:0 auto 0 0}.brand{font:700 22px "Courier New",monospace;color:#f0f6fc;padding:0 10px 24px}.brand small{display:block;color:#8b949e;font:12px Arial,sans-serif;margin-top:4px}.nav-btn{width:100%;border:0;background:transparent;color:#8b949e;text-align:left;padding:12px;border-radius:6px;margin:3px 0;font-size:14px;cursor:pointer}.nav-btn:hover,.nav-btn.active{background:#21262d;color:#f0f6fc}.main{margin-left:230px;width:calc(100% - 230px);padding:30px}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}.topbar h1{margin:0;font-size:24px;color:#f0f6fc}.badge{font-size:12px;padding:6px 10px;border:1px solid #238636;border-radius:20px;color:#3fb950}.page{display:none}.page.active{display:block}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:18px}.card h3{margin:0 0 10px;color:#f0f6fc;font-size:15px}.muted{color:#8b949e;font-size:13px}.status-ok{color:#3fb950}.section-title{margin:0 0 18px;color:#f0f6fc}.terminal-box{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:18px}.terminal-title{color:#58a6ff;font:700 14px "Courier New",monospace;margin-bottom:12px}#auth{display:flex;align-items:center;gap:8px;font:14px "Courier New",monospace}#auth label{color:#3fb950;font-weight:bold;white-space:nowrap}#chave{flex:1;background:transparent;border:0;outline:0;color:#f0f6fc;font:inherit}#status{margin:10px 0;color:#8b949e;font:13px "Courier New",monospace;white-space:pre-wrap}#xterm-container{display:none;height:520px;overflow:hidden}#fallback{display:none;border-top:1px solid #30363d;padding-top:12px;font:14px "Courier New",monospace}#fallback-output{min-height:100px;max-height:240px;overflow:auto;white-space:pre-wrap}#fallback-line{display:flex;gap:8px;margin-top:8px}#fallback-input{flex:1;background:transparent;border:0;outline:0;color:#f0f6fc;font:inherit}.erro{color:#f85149!important}.service-row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #21262d}.service-row:last-child{border:0}@media(max-width:800px){.sidebar{width:70px;padding:20px 8px}.brand{font-size:16px;padding:0 4px 20px}.brand small,.nav-text{display:none}.main{margin-left:70px;width:calc(100% - 70px);padding:18px}.grid{grid-template-columns:1fr}.nav-btn{text-align:center}.topbar h1{font-size:20px}}
+</style>
 </head>
 <body>
-<div id="terminal-box">
-    <div id="titulo">BeneX | Terminal Administrativo Privado</div>
-
-    <div id="auth">
-        <label for="chave">[AUTENTICAÇÃO] Chave:</label>
-        <input id="chave" type="password" autocomplete="off" autofocus>
-    </div>
-
-    <div id="status">Terminal protegido BeneX iniciado.</div>
-    <div id="xterm-container"></div>
-
-    <div id="fallback">
-        <div id="fallback-output"></div>
-        <div id="fallback-line">
-            <span>HTTP$</span>
-            <input id="fallback-input" autocomplete="off">
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<div class="app">
+<aside class="sidebar"><div class="brand">BeneX<small>Painel Administrativo</small></div><button class="nav-btn active" data-page="visao">◫ <span class="nav-text">Visão Geral</span></button><button class="nav-btn" data-page="terminal">›_ <span class="nav-text">Terminal</span></button><button class="nav-btn" data-page="sistema">▣ <span class="nav-text">Sistema</span></button><button class="nav-btn" data-page="servicos">◆ <span class="nav-text">Serviços</span></button></aside>
+<main class="main"><header class="topbar"><h1 id="page-title">Visão Geral</h1><span class="badge">PAINEL PRIVADO</span></header>
+<section id="visao" class="page active"><div class="grid"><div class="card"><h3>Site BeneX</h3><div class="status-ok">Configurado</div><p class="muted">benex.net.br</p></div><div class="card"><h3>API BeneX</h3><div class="status-ok">Configurada</div><p class="muted">api.benex.net.br</p></div><div class="card"><h3>Terminal</h3><div class="status-ok">Interativo</div><p class="muted">WebSocket + PTY</p></div></div><div class="card" style="margin-top:16px"><h3>Resumo</h3><p class="muted">Base administrativa BeneX pronta para receber monitoramento, controles e integrações dos serviços.</p></div></section>
+<section id="terminal" class="page"><div class="terminal-box"><div class="terminal-title">BeneX | Terminal Administrativo Privado</div><div id="auth"><label for="chave">[AUTENTICAÇÃO] Chave:</label><input id="chave" type="password" autocomplete="off"></div><div id="status">Terminal protegido BeneX iniciado.</div><div id="xterm-container"></div><div id="fallback"><div id="fallback-output"></div><div id="fallback-line"><span>HTTP$</span><input id="fallback-input" autocomplete="off"></div></div></div></section>
+<section id="sistema" class="page"><h2 class="section-title">Sistema</h2><div class="grid"><div class="card"><h3>CPU</h3><p class="muted">Monitoramento será conectado ao backend administrativo.</p></div><div class="card"><h3>Memória</h3><p class="muted">Monitoramento será conectado ao backend administrativo.</p></div><div class="card"><h3>Armazenamento</h3><p class="muted">Monitoramento será conectado ao backend administrativo.</p></div></div></section>
+<section id="servicos" class="page"><h2 class="section-title">Serviços</h2><div class="card"><div class="service-row"><span>Vercel</span><span class="muted">Integração pendente</span></div><div class="service-row"><span>Render</span><span class="muted">Integração pendente</span></div><div class="service-row"><span>GitHub</span><span class="muted">Integração pendente</span></div><div class="service-row"><span>n8n / IA</span><span class="muted">Futuro</span></div></div></section>
+</main></div>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script>
-const API_URL = "https://api.benex.net.br/executar";
-const WS_URL = "wss://api.benex.net.br/terminal";
-const HASH_CORRETO = "54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
-
-const auth = document.getElementById("auth");
-const chave = document.getElementById("chave");
-const statusEl = document.getElementById("status");
-const xtermContainer = document.getElementById("xterm-container");
-const fallback = document.getElementById("fallback");
-const fallbackOutput = document.getElementById("fallback-output");
-const fallbackInput = document.getElementById("fallback-input");
-
-let tokenAcesso = "";
-let diretorioAtual = ".";
-let ws = null;
-let term = null;
-let fitAddon = null;
-
-async function gerarSHA256(texto) {
-    const dados = new TextEncoder().encode(texto);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", dados);
-    return Array.from(new Uint8Array(hashBuffer))
-        .map(byte => byte.toString(16).padStart(2, "0"))
-        .join("");
-}
-
-function mostrarStatus(texto, erro = false) {
-    statusEl.textContent = texto;
-    statusEl.className = erro ? "erro" : "";
-}
-
-function ativarFallback(motivo) {
-    mostrarStatus(motivo + " Modo HTTP disponível.", true);
-    xtermContainer.style.display = "none";
-    fallback.style.display = "block";
-    fallbackInput.focus();
-}
-
-function enviarResize() {
-    if (!ws || ws.readyState !== WebSocket.OPEN || !term) return;
-    ws.send(JSON.stringify({ type: "resize", rows: term.rows, cols: term.cols }));
-}
-
-function iniciarTerminalWebSocket() {
-    try {
-        term = new Terminal({
-            cursorBlink: true,
-            convertEol: false,
-            fontFamily: '"Courier New", monospace',
-            fontSize: 15,
-            theme: {
-                background: "#161b22",
-                foreground: "#c9d1d9",
-                cursor: "#f0f6fc"
-            }
-        });
-
-        fitAddon = new FitAddon.FitAddon();
-        term.loadAddon(fitAddon);
-        xtermContainer.style.display = "block";
-        term.open(xtermContainer);
-        fitAddon.fit();
-
-        ws = new WebSocket(WS_URL);
-
-        ws.onopen = () => {
-            mostrarStatus("Terminal interativo conectado.");
-            enviarResize();
-            term.focus();
-        };
-
-        ws.onmessage = evento => term.write(evento.data);
-
-        term.onData(data => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "input", data }));
-            }
-        });
-
-        ws.onerror = () => ativarFallback("Falha na conexão WebSocket.");
-
-        ws.onclose = () => {
-            if (fallback.style.display !== "block") {
-                ativarFallback("Sessão interativa encerrada.");
-            }
-        };
-
-        window.addEventListener("resize", () => {
-            if (!fitAddon || !term) return;
-            fitAddon.fit();
-            enviarResize();
-        });
-    } catch (erro) {
-        ativarFallback("Não foi possível iniciar o terminal interativo.");
-    }
-}
-
-chave.addEventListener("keydown", async evento => {
-    if (evento.key !== "Enter") return;
-    const valor = chave.value;
-    if (!valor) return;
-
-    const hashDigitado = await gerarSHA256(valor);
-    if (hashDigitado !== HASH_CORRETO) {
-        chave.value = "";
-        mostrarStatus("Chave administrativa inválida.", true);
-        return;
-    }
-
-    tokenAcesso = valor;
-    chave.value = "";
-    auth.style.display = "none";
-    mostrarStatus("Autenticação administrativa concluída. Conectando...");
-    iniciarTerminalWebSocket();
-});
-
-fallbackInput.addEventListener("keydown", async evento => {
-    if (evento.key !== "Enter") return;
-    const comando = fallbackInput.value.trim();
-    if (!comando) return;
-    fallbackInput.value = "";
-
-    if (comando.toLowerCase() === "clear" || comando.toLowerCase() === "cls") {
-        fallbackOutput.textContent = "";
-        return;
-    }
-
-    fallbackOutput.textContent += `\nHTTP$ ${comando}\n`;
-
-    try {
-        const resposta = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: tokenAcesso, comando, diretorio: diretorioAtual })
-        });
-        const dados = await resposta.json();
-        if (dados.diretorio !== undefined) diretorioAtual = dados.diretorio;
-        fallbackOutput.textContent += (dados.saida || dados.detail || dados.erro || "") + "\n";
-        fallbackOutput.scrollTop = fallbackOutput.scrollHeight;
-    } catch (erro) {
-        fallbackOutput.textContent += "Não foi possível conectar à API BeneX.\n";
-    }
-});
-</script>
-</body>
-</html>
+const API_URL="https://api.benex.net.br/executar",WS_URL="wss://api.benex.net.br/terminal",HASH_CORRETO="54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
+const auth=document.getElementById("auth"),chave=document.getElementById("chave"),statusEl=document.getElementById("status"),xtermContainer=document.getElementById("xterm-container"),fallback=document.getElementById("fallback"),fallbackOutput=document.getElementById("fallback-output"),fallbackInput=document.getElementById("fallback-input");let tokenAcesso="",diretorioAtual=".",ws=null,term=null,fitAddon=null,terminalIniciado=false;
+document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));btn.classList.add('active');const id=btn.dataset.page;document.getElementById(id).classList.add('active');document.getElementById('page-title').textContent={visao:'Visão Geral',terminal:'Terminal',sistema:'Sistema',servicos:'Serviços'}[id];if(id==='terminal'){setTimeout(()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}chave.focus()},30)}}));
+async function gerarSHA256(texto){const dados=new TextEncoder().encode(texto),hashBuffer=await crypto.subtle.digest("SHA-256",dados);return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,"0")).join("")}
+function mostrarStatus(texto,erro=false){statusEl.textContent=texto;statusEl.className=erro?"erro":""}function ativarFallback(motivo){mostrarStatus(motivo+" Modo HTTP disponível.",true);xtermContainer.style.display="none";fallback.style.display="block";fallbackInput.focus()}function enviarResize(){if(ws&&ws.readyState===WebSocket.OPEN&&term)ws.send(JSON.stringify({type:"resize",rows:term.rows,cols:term.cols}))}
+function iniciarTerminalWebSocket(){if(terminalIniciado)return;terminalIniciado=true;try{term=new Terminal({cursorBlink:true,convertEol:false,fontFamily:'"Courier New", monospace',fontSize:15,theme:{background:"#161b22",foreground:"#c9d1d9",cursor:"#f0f6fc"}});fitAddon=new FitAddon.FitAddon();term.loadAddon(fitAddon);xtermContainer.style.display="block";term.open(xtermContainer);fitAddon.fit();ws=new WebSocket(WS_URL);ws.onopen=()=>{mostrarStatus("Terminal interativo conectado.");enviarResize();term.focus()};ws.onmessage=e=>term.write(e.data);term.onData(data=>{if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",data}))});ws.onerror=()=>ativarFallback("Falha na conexão WebSocket.");ws.onclose=()=>{if(fallback.style.display!=="block")ativarFallback("Sessão interativa encerrada.")}}catch(e){ativarFallback("Não foi possível iniciar o terminal interativo.")}}
+window.addEventListener("resize",()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}});chave.addEventListener("keydown",async e=>{if(e.key!=="Enter")return;const valor=chave.value;if(!valor)return;if(await gerarSHA256(valor)!==HASH_CORRETO){chave.value="";mostrarStatus("Chave administrativa inválida.",true);return}tokenAcesso=valor;chave.value="";auth.style.display="none";mostrarStatus("Autenticação administrativa concluída. Conectando...");iniciarTerminalWebSocket()});fallbackInput.addEventListener("keydown",async e=>{if(e.key!=="Enter")return;const comando=fallbackInput.value.trim();if(!comando)return;fallbackInput.value="";if(["clear","cls"].includes(comando.toLowerCase())){fallbackOutput.textContent="";return}fallbackOutput.textContent+=`\nHTTP$ ${comando}\n`;try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:tokenAcesso,comando,diretorio:diretorioAtual})}),d=await r.json();if(d.diretorio!==undefined)diretorioAtual=d.diretorio;fallbackOutput.textContent+=(d.saida||d.detail||d.erro||"")+"\n";fallbackOutput.scrollTop=fallbackOutput.scrollHeight}catch(e){fallbackOutput.textContent+="Não foi possível conectar à API BeneX.\n"}});
+</script></body></html>
