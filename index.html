@@ -3,652 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Terminal Privado | BeneX</title>
 
-    <style>
-        * {
-            box-sizing: border-box;
-        }
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
 
+    <style>
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             padding: 20px;
-
             min-height: 100vh;
-
             background: #0d1117;
             color: #c9d1d9;
-
             font-family: "Courier New", monospace;
         }
-
-        #terminal {
+        #terminal-box {
             width: 100%;
             max-width: 1000px;
-
             margin: 40px auto;
             padding: 20px;
-
             background: #161b22;
-
             border: 1px solid #30363d;
             border-radius: 8px;
-
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
-
-            cursor: text;
+            box-shadow: 0 8px 30px rgba(0,0,0,.45);
         }
-
         #titulo {
             color: #58a6ff;
             font-weight: bold;
             margin-bottom: 15px;
         }
-
-        #historico {
-            min-height: 300px;
-            max-height: 600px;
-
-            overflow-y: auto;
-
-            white-space: pre-wrap;
-            overflow-wrap: anywhere;
-
-            line-height: 1.5;
-
-            margin-bottom: 12px;
-        }
-
-        #historico::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        #historico::-webkit-scrollbar-thumb {
-            background: #30363d;
-            border-radius: 4px;
-        }
-
-        .linha {
-            display: flex;
-            align-items: flex-start;
-            flex-wrap: wrap;
-
-            margin: 3px 0;
-        }
-
-        .prompt {
-            color: #3fb950;
-            font-weight: bold;
-            margin-right: 8px;
-
-            white-space: nowrap;
-        }
-
-        .comando {
-            color: #f0f6fc;
-        }
-
-        .saida {
-            color: #c9d1d9;
-        }
-
-        .erro {
-            color: #f85149;
-        }
-
-        .info {
-            color: #8b949e;
-        }
-
-        #linha-input {
+        #auth {
             display: flex;
             align-items: center;
+            gap: 8px;
         }
-
-        #inputTerminal {
+        #auth label {
+            color: #3fb950;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        #chave {
             flex: 1;
-
             min-width: 100px;
-
             background: transparent;
-
             border: none;
             outline: none;
-
             color: #f0f6fc;
-
-            font-family: inherit;
-            font-size: inherit;
+            font: inherit;
         }
-
-        #loading {
-            display: none;
-
-            margin-top: 8px;
-
+        #status {
+            margin: 10px 0;
             color: #8b949e;
-            font-size: 14px;
+            white-space: pre-wrap;
         }
+        #xterm-container {
+            display: none;
+            height: 520px;
+            overflow: hidden;
+        }
+        #fallback {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #30363d;
+        }
+        #fallback-output {
+            min-height: 100px;
+            max-height: 240px;
+            overflow: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        #fallback-line {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        #fallback-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #f0f6fc;
+            font: inherit;
+        }
+        .erro { color: #f85149 !important; }
     </style>
 </head>
-
 <body>
+<div id="terminal-box">
+    <div id="titulo">BeneX | Terminal Administrativo Privado</div>
 
-<div id="terminal">
-
-    <div id="titulo">
-        BeneX | Terminal Administrativo Privado
+    <div id="auth">
+        <label for="chave">[AUTENTICAÇÃO] Chave:</label>
+        <input id="chave" type="password" autocomplete="off" autofocus>
     </div>
 
-    <div id="historico"></div>
+    <div id="status">Terminal protegido BeneX iniciado.</div>
+    <div id="xterm-container"></div>
 
-    <div id="linha-input">
-
-        <span
-            id="labelPrompt"
-            class="prompt"
-        >
-            [AUTENTICAÇÃO] Chave:
-        </span>
-
-        <input
-            id="inputTerminal"
-            type="password"
-            autocomplete="off"
-            autofocus
-        >
-
+    <div id="fallback">
+        <div id="fallback-output"></div>
+        <div id="fallback-line">
+            <span>HTTP$</span>
+            <input id="fallback-input" autocomplete="off">
+        </div>
     </div>
-
-    <div id="loading">
-        executando...
-    </div>
-
 </div>
 
-
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script>
-
-    const API_URL =
-        "https://api.benex.net.br/executar";
-
-
-    const terminal =
-        document.getElementById("terminal");
-
-    const historico =
-        document.getElementById("historico");
-
-    const input =
-        document.getElementById("inputTerminal");
-
-    const labelPrompt =
-        document.getElementById("labelPrompt");
-
-    const loading =
-        document.getElementById("loading");
-
-
-    let tokenAcesso = "";
-
-    let diretorioAtual = ".";
-
-    let diretorioExibicao = "~";
-
-    let historicoComandos = [];
-
-    let posicaoHistorico = -1;
-
-
-    function adicionarTexto(
-        texto,
-        classe = ""
-    ) {
-
-        const linha =
-            document.createElement("div");
-
-        if (classe) {
-            linha.className = classe;
-        }
-
-        linha.textContent = texto;
-
-        historico.appendChild(linha);
-
-        historico.scrollTop =
-            historico.scrollHeight;
-    }
-
-
-    function adicionarComando(
-        comando
-    ) {
-
-        const linha =
-            document.createElement("div");
-
-        linha.className = "linha";
-
-
-        const prompt =
-            document.createElement("span");
-
-        prompt.className = "prompt";
-
-        prompt.textContent =
-            `benex@servidor:${diretorioExibicao}$`;
-
-
-        const texto =
-            document.createElement("span");
-
-        texto.className = "comando";
-
-        texto.textContent = comando;
-
-
-        linha.appendChild(prompt);
-
-        linha.appendChild(texto);
-
-        historico.appendChild(linha);
-
-        historico.scrollTop =
-            historico.scrollHeight;
-    }
-
-
-    function atualizarPrompt() {
-
-        labelPrompt.textContent =
-            `benex@servidor:${diretorioExibicao}$`;
-    }
-
-
-    function resetarAutenticacao() {
-
-        tokenAcesso = "";
-
-        input.type = "password";
-
-        labelPrompt.textContent =
-            "[AUTENTICAÇÃO] Chave:";
-
-        adicionarTexto(
-            "Sessão inválida. Digite novamente sua chave.",
-            "erro"
-        );
-    }
-
-
-    terminal.addEventListener(
-        "click",
-        () => input.focus()
-    );
-
-
-    input.addEventListener(
-        "keydown",
-        async function (evento) {
-
-            /*
-             * HISTÓRICO ↑ ↓
-             */
-
-            if (
-                tokenAcesso &&
-                (
-                    evento.key === "ArrowUp" ||
-                    evento.key === "ArrowDown"
-                )
-            ) {
-
-                evento.preventDefault();
-
-
-                if (
-                    historicoComandos.length === 0
-                ) {
-                    return;
-                }
-
-
-                if (
-                    evento.key === "ArrowUp"
-                ) {
-
-                    if (
-                        posicaoHistorico <
-                        historicoComandos.length - 1
-                    ) {
-
-                        posicaoHistorico++;
-                    }
-
-                }
-
-
-                if (
-                    evento.key === "ArrowDown"
-                ) {
-
-                    if (
-                        posicaoHistorico > -1
-                    ) {
-
-                        posicaoHistorico--;
-                    }
-
-                }
-
-
-                if (
-                    posicaoHistorico === -1
-                ) {
-
-                    input.value = "";
-
-                } else {
-
-                    input.value =
-                        historicoComandos[
-                            historicoComandos.length -
-                            1 -
-                            posicaoHistorico
-                        ];
-
-                }
-
-                return;
+const API_URL = "https://api.benex.net.br/executar";
+const WS_URL = "wss://api.benex.net.br/terminal";
+const HASH_CORRETO = "54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
+
+const auth = document.getElementById("auth");
+const chave = document.getElementById("chave");
+const statusEl = document.getElementById("status");
+const xtermContainer = document.getElementById("xterm-container");
+const fallback = document.getElementById("fallback");
+const fallbackOutput = document.getElementById("fallback-output");
+const fallbackInput = document.getElementById("fallback-input");
+
+let tokenAcesso = "";
+let diretorioAtual = ".";
+let ws = null;
+let term = null;
+let fitAddon = null;
+
+async function gerarSHA256(texto) {
+    const dados = new TextEncoder().encode(texto);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dados);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map(byte => byte.toString(16).padStart(2, "0"))
+        .join("");
+}
+
+function mostrarStatus(texto, erro = false) {
+    statusEl.textContent = texto;
+    statusEl.className = erro ? "erro" : "";
+}
+
+function ativarFallback(motivo) {
+    mostrarStatus(motivo + " Modo HTTP disponível.", true);
+    xtermContainer.style.display = "none";
+    fallback.style.display = "block";
+    fallbackInput.focus();
+}
+
+function enviarResize() {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !term) return;
+    ws.send(JSON.stringify({ type: "resize", rows: term.rows, cols: term.cols }));
+}
+
+function iniciarTerminalWebSocket() {
+    try {
+        term = new Terminal({
+            cursorBlink: true,
+            convertEol: false,
+            fontFamily: '"Courier New", monospace',
+            fontSize: 15,
+            theme: {
+                background: "#161b22",
+                foreground: "#c9d1d9",
+                cursor: "#f0f6fc"
             }
+        });
 
+        fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        xtermContainer.style.display = "block";
+        term.open(xtermContainer);
+        fitAddon.fit();
 
-            /*
-             * ENTER
-             */
+        ws = new WebSocket(WS_URL);
 
-            if (
-                evento.key !== "Enter"
-            ) {
-                return;
+        ws.onopen = () => {
+            mostrarStatus("Terminal interativo conectado.");
+            enviarResize();
+            term.focus();
+        };
+
+        ws.onmessage = evento => term.write(evento.data);
+
+        term.onData(data => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "input", data }));
             }
+        });
 
+        ws.onerror = () => ativarFallback("Falha na conexão WebSocket.");
 
-            const valor =
-                input.value.trim();
-
-
-            if (!valor) {
-                return;
+        ws.onclose = () => {
+            if (fallback.style.display !== "block") {
+                ativarFallback("Sessão interativa encerrada.");
             }
+        };
 
-
-            /*
-             * PRIMEIRA ENTRADA:
-             * CHAVE
-             */
-
-            if (!tokenAcesso) {
-
-    async function gerarSHA256(texto) {
-
-        const dados =
-            new TextEncoder().encode(texto);
-
-        const hashBuffer =
-            await crypto.subtle.digest(
-                "SHA-256",
-                dados
-            );
-
-        const hashArray =
-            Array.from(
-                new Uint8Array(hashBuffer)
-            );
-
-        return hashArray
-            .map(
-                byte =>
-                    byte
-                        .toString(16)
-                        .padStart(2, "0")
-            )
-            .join("");
+        window.addEventListener("resize", () => {
+            if (!fitAddon || !term) return;
+            fitAddon.fit();
+            enviarResize();
+        });
+    } catch (erro) {
+        ativarFallback("Não foi possível iniciar o terminal interativo.");
     }
+}
 
+chave.addEventListener("keydown", async evento => {
+    if (evento.key !== "Enter") return;
+    const valor = chave.value;
+    if (!valor) return;
 
-    const HASH_CORRETO =
-        "54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
-
-
-    const hashDigitado =
-        await gerarSHA256(valor);
-
-
-    if (
-        hashDigitado !== HASH_CORRETO
-    ) {
-
-        input.value = "";
-
-        adicionarTexto(
-            "Chave administrativa inválida.",
-            "erro"
-        );
-
+    const hashDigitado = await gerarSHA256(valor);
+    if (hashDigitado !== HASH_CORRETO) {
+        chave.value = "";
+        mostrarStatus("Chave administrativa inválida.", true);
         return;
     }
 
-
     tokenAcesso = valor;
-
-    input.value = "";
-
-    input.type = "text";
-
-    atualizarPrompt();
-
-
-    adicionarTexto(
-        "Autenticação administrativa concluída.",
-        "info"
-    );
-
-    return;
-}
-
-
-            /*
-             * CLEAR
-             */
-
-            if (
-                valor.toLowerCase() === "clear" ||
-                valor.toLowerCase() === "cls"
-            ) {
-
-                historico.innerHTML = "";
-
-                input.value = "";
-
-                return;
-            }
-
-
-            adicionarComando(valor);
-
-
-            historicoComandos.push(valor);
-
-            posicaoHistorico = -1;
-
-            input.value = "";
-
-            input.disabled = true;
-
-            loading.style.display =
-                "block";
-
-
-            try {
-
-                const resposta =
-                    await fetch(
-                        API_URL,
-                        {
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-                                token:
-                                    tokenAcesso,
-
-                                comando:
-                                    valor,
-
-                                diretorio:
-                                    diretorioAtual
-                            })
-                        }
-                    );
-
-
-                let dados;
-
-
-                try {
-
-                    dados =
-                        await resposta.json();
-
-                } catch {
-
-                    throw new Error(
-                        "Resposta inválida do servidor."
-                    );
-                }
-
-
-                /*
-                 * SUCESSO
-                 */
-
-                if (resposta.ok) {
-
-                    if (
-                        dados.diretorio !==
-                        undefined
-                    ) {
-
-                        diretorioAtual =
-                            dados.diretorio;
-
-
-                        if (
-                            diretorioAtual === "." ||
-                            diretorioAtual === ""
-                        ) {
-
-                            diretorioExibicao =
-                                "~";
-
-                        } else {
-
-                            const partes =
-                                diretorioAtual
-                                    .replaceAll("\\", "/")
-                                    .split("/");
-
-
-                            diretorioExibicao =
-                                partes[
-                                    partes.length - 1
-                                ] || "~";
-                        }
-
-
-                        atualizarPrompt();
-                    }
-
-
-                    if (dados.saida) {
-
-                        adicionarTexto(
-                            dados.saida,
-                            "saida"
-                        );
-
-                    }
-
-                    return;
-                }
-
-
-                /*
-                 * FASTAPI usa "detail"
-                 */
-
-                const mensagem =
-                    dados.detail ||
-                    dados.erro ||
-                    dados.saida ||
-                    "Erro desconhecido.";
-
-
-                /*
-                 * CHAVE INVÁLIDA
-                 */
-
-                if (
-                    resposta.status === 403 &&
-                    mensagem === "Acesso negado."
-                ) {
-
-                    resetarAutenticacao();
-
-                    return;
-                }
-
-
-                adicionarTexto(
-                    mensagem,
-                    "erro"
-                );
-
-
-            } catch (erro) {
-
-                adicionarTexto(
-                    "Não foi possível conectar à API BeneX.",
-                    "erro"
-                );
-
-            } finally {
-
-                input.disabled = false;
-
-                loading.style.display =
-                    "none";
-
-                input.focus();
-            }
-
-        }
-    );
-
-
-    adicionarTexto(
-        "Terminal protegido BeneX iniciado.",
-        "info"
-    );
-
+    chave.value = "";
+    auth.style.display = "none";
+    mostrarStatus("Autenticação administrativa concluída. Conectando...");
+    iniciarTerminalWebSocket();
+});
+
+fallbackInput.addEventListener("keydown", async evento => {
+    if (evento.key !== "Enter") return;
+    const comando = fallbackInput.value.trim();
+    if (!comando) return;
+    fallbackInput.value = "";
+
+    if (comando.toLowerCase() === "clear" || comando.toLowerCase() === "cls") {
+        fallbackOutput.textContent = "";
+        return;
+    }
+
+    fallbackOutput.textContent += `\nHTTP$ ${comando}\n`;
+
+    try {
+        const resposta = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: tokenAcesso, comando, diretorio: diretorioAtual })
+        });
+        const dados = await resposta.json();
+        if (dados.diretorio !== undefined) diretorioAtual = dados.diretorio;
+        fallbackOutput.textContent += (dados.saida || dados.detail || dados.erro || "") + "\n";
+        fallbackOutput.scrollTop = fallbackOutput.scrollHeight;
+    } catch (erro) {
+        fallbackOutput.textContent += "Não foi possível conectar à API BeneX.\n";
+    }
+});
 </script>
-
 </body>
 </html>
