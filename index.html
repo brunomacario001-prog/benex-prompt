@@ -19,6 +19,7 @@
 <section id="servicos" class="page"><h2 class="section-title">Serviços</h2><div class="card"><div class="service-row"><span>Vercel</span><span class="muted">Integração pendente</span></div><div class="service-row"><span>Render</span><span class="muted">Integração pendente</span></div><div class="service-row"><span>GitHub</span><span class="muted">Integração pendente</span></div><div class="service-row"><span>n8n / IA</span><span class="muted">Futuro</span></div></div></section>
 </main></div>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script src="services.js"></script>
 <script>
 const API_URL="https://api.benex.net.br/executar",HEALTH_URL="https://api.benex.net.br/health",WS_URL="wss://api.benex.net.br/terminal",HASH_CORRETO="54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
 const auth=document.getElementById("auth"),chave=document.getElementById("chave"),statusEl=document.getElementById("status"),xtermContainer=document.getElementById("xterm-container"),fallback=document.getElementById("fallback"),fallbackOutput=document.getElementById("fallback-output"),fallbackInput=document.getElementById("fallback-input");let tokenAcesso="",diretorioAtual=".",ws=null,term=null,fitAddon=null,terminalIniciado=false;
