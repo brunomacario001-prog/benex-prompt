@@ -271,21 +271,56 @@ async function atualizarSistemaBeneX() {
 
 
 function habilitarColarNoTerminal() {
-  document.addEventListener("paste", event => {
+  const terminalAtivo = () => {
     const paginaTerminal = document.getElementById("terminal");
     const container = document.getElementById("xterm-container");
+    return paginaTerminal?.classList.contains("active")
+      && container
+      && container.style.display !== "none";
+  };
 
-    if (!paginaTerminal?.classList.contains("active")) return;
-    if (!container || container.style.display === "none") return;
-    if (typeof ws === "undefined" || !ws || ws.readyState !== WebSocket.OPEN) return;
+  const enviarTextoColado = texto => {
+    if (!texto) return false;
+
+    if (typeof term !== "undefined" && term && typeof term.paste === "function") {
+      term.paste(texto);
+      term.focus();
+      return true;
+    }
+
+    if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "input", data: texto }));
+      return true;
+    }
+
+    return false;
+  };
+
+  document.addEventListener("paste", event => {
+    if (!terminalAtivo()) return;
 
     const texto = event.clipboardData?.getData("text");
     if (!texto) return;
 
     event.preventDefault();
-    ws.send(JSON.stringify({ type: "input", data: texto }));
+    enviarTextoColado(texto);
+  }, true);
 
-    if (typeof term !== "undefined" && term) term.focus();
+  document.addEventListener("keydown", async event => {
+    const teclaV = event.key?.toLowerCase() === "v";
+    const atalhoColar = teclaV && (event.ctrlKey || event.metaKey);
+    if (!atalhoColar || !terminalAtivo()) return;
+
+    if (!navigator.clipboard?.readText) return;
+
+    event.preventDefault();
+
+    try {
+      const texto = await navigator.clipboard.readText();
+      enviarTextoColado(texto);
+    } catch (erro) {
+      console.warn("BeneX Terminal: acesso à área de transferência não permitido.", erro);
+    }
   }, true);
 }
 
