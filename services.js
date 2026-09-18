@@ -30,9 +30,11 @@ function atualizarLinha(nome, item, unidade, colecao, fallback) {
 async function atualizarServicosBeneX() {
   const renderRow = localizarLinhaServico("Render");
   const githubRow = localizarLinhaServico("GitHub");
-  if (!renderRow && !githubRow) return;
+  const vercelRow = localizarLinhaServico("Vercel");
+  const rows = [renderRow, githubRow, vercelRow].filter(Boolean);
+  if (!rows.length) return;
 
-  [renderRow, githubRow].filter(Boolean).forEach(row => {
+  rows.forEach(row => {
     const status = row.querySelector("span:last-child");
     status.textContent = "Verificando...";
     status.className = "status-warn";
@@ -48,11 +50,13 @@ async function atualizarServicosBeneX() {
     const data = await response.json();
     const render = data?.services?.render;
     const github = data?.services?.github;
+    const vercel = data?.services?.vercel;
 
     atualizarLinha("Render", render, "serviços", render?.services, "Render API");
     atualizarLinha("GitHub", github, "repositórios", github?.repositories, "GitHub API");
+    atualizarLinha("Vercel", vercel, "projetos", vercel?.projects, "Vercel API");
   } catch (error) {
-    [renderRow, githubRow].filter(Boolean).forEach(row => {
+    rows.forEach(row => {
       const status = row.querySelector("span:last-child");
       status.textContent = "Indisponível";
       status.className = "status-error";
