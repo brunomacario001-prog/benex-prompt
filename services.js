@@ -1,6 +1,9 @@
 const ADMIN_SERVICES_URL = "https://admin-api.benex.net.br/services";
 const SYSTEM_URL = "https://api.benex.net.br/system";
 
+let ultimoServicos = null;
+let ultimoSistema = null;
+
 function localizarLinhaServico(nome) {
   return [...document.querySelectorAll("#servicos .service-row")]
     .find(row => row.querySelector("span")?.textContent.trim() === nome);
@@ -28,12 +31,40 @@ function atualizarLinha(nome, item, unidade, colecao, fallback) {
   row.title = nomes.length ? nomes.join(" • ") : fallback;
 }
 
+function atualizarResumoGeral() {
+  const resumo = document.getElementById("resumo-status");
+  if (!resumo || !ultimoServicos) return;
+
+  const services = ultimoServicos.services || {};
+  const partes = [];
+
+  if (services.vercel?.status === "online") {
+    partes.push(`Vercel: ${services.vercel.count ?? 0} projetos`);
+  }
+  if (services.render?.status === "online") {
+    partes.push(`Render: ${services.render.count ?? 0} serviços`);
+  }
+  if (services.github?.status === "online") {
+    partes.push(`GitHub: ${services.github.count ?? 0} repositórios`);
+  }
+
+  if (ultimoSistema) {
+    const memoria = ultimoSistema.memory?.used_percent;
+    const disco = ultimoSistema.disk?.used_percent;
+    if (memoria !== undefined) partes.push(`Memória: ${memoria}%`);
+    if (disco !== undefined) partes.push(`Armazenamento: ${disco}%`);
+  }
+
+  resumo.textContent = partes.length
+    ? `Infraestrutura BeneX operacional • ${partes.join(" • ")}`
+    : "Infraestrutura BeneX disponível.";
+}
+
 async function atualizarServicosBeneX() {
   const renderRow = localizarLinhaServico("Render");
   const githubRow = localizarLinhaServico("GitHub");
   const vercelRow = localizarLinhaServico("Vercel");
   const rows = [renderRow, githubRow, vercelRow].filter(Boolean);
-  if (!rows.length) return;
 
   rows.forEach(row => {
     const status = row.querySelector("span:last-child");
@@ -49,6 +80,8 @@ async function atualizarServicosBeneX() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const data = await response.json();
+    ultimoServicos = data;
+
     const render = data?.services?.render;
     const github = data?.services?.github;
     const vercel = data?.services?.vercel;
@@ -56,6 +89,7 @@ async function atualizarServicosBeneX() {
     atualizarLinha("Render", render, "serviços", render?.services, "Render API");
     atualizarLinha("GitHub", github, "repositórios", github?.repositories, "GitHub API");
     atualizarLinha("Vercel", vercel, "projetos", vercel?.projects, "Vercel API");
+    atualizarResumoGeral();
   } catch (error) {
     rows.forEach(row => {
       const status = row.querySelector("span:last-child");
@@ -81,16 +115,13 @@ function preencherCardSistema(titulo, texto, detalhe) {
 }
 
 async function atualizarSistemaBeneX() {
-  const cards = ["CPU", "Memória", "Armazenamento"]
-    .map(localizarCardSistema)
-    .filter(Boolean);
-  if (!cards.length) return;
-
   try {
     const response = await fetch(SYSTEM_URL, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const data = await response.json();
+    ultimoSistema = data;
+
     preencherCardSistema(
       "CPU",
       `${data.cpu_logical ?? "—"} CPUs lógicas`,
@@ -106,6 +137,7 @@ async function atualizarSistemaBeneX() {
       `${data.disk?.used_percent ?? "—"}% em uso`,
       data.disk ? `${data.disk.free_gb ?? "—"} GB livres de ${data.disk.total_gb ?? "—"} GB` : ""
     );
+    atualizarResumoGeral();
   } catch (error) {
     preencherCardSistema("CPU", "Indisponível", "Não foi possível consultar /system");
     preencherCardSistema("Memória", "Indisponível", "Não foi possível consultar /system");
@@ -115,7 +147,10 @@ async function atualizarSistemaBeneX() {
 
 window.atualizarServicosBeneX = atualizarServicosBeneX;
 window.atualizarSistemaBeneX = atualizarSistemaBeneX;
+
 document.addEventListener("DOMContentLoaded", () => {
   atualizarServicosBeneX();
   atualizarSistemaBeneX();
+  setInterval(atualizarServicosBeneX, 30000);
+  setInterval(atualizarSistemaBeneX, 30000);
 });
