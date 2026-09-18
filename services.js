@@ -1,4 +1,5 @@
 const ADMIN_SERVICES_URL = "https://admin-api.benex.net.br/services";
+const SYSTEM_URL = "https://api.benex.net.br/system";
 
 function localizarLinhaServico(nome) {
   return [...document.querySelectorAll("#servicos .service-row")]
@@ -65,5 +66,56 @@ async function atualizarServicosBeneX() {
   }
 }
 
+function localizarCardSistema(titulo) {
+  return [...document.querySelectorAll("#sistema .card")]
+    .find(card => card.querySelector("h3")?.textContent.trim() === titulo);
+}
+
+function preencherCardSistema(titulo, texto, detalhe) {
+  const card = localizarCardSistema(titulo);
+  if (!card) return;
+  const p = card.querySelector(".muted");
+  if (!p) return;
+  p.textContent = texto;
+  card.title = detalhe || "";
+}
+
+async function atualizarSistemaBeneX() {
+  const cards = ["CPU", "Memória", "Armazenamento"]
+    .map(localizarCardSistema)
+    .filter(Boolean);
+  if (!cards.length) return;
+
+  try {
+    const response = await fetch(SYSTEM_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    preencherCardSistema(
+      "CPU",
+      `${data.cpu_logical ?? "—"} CPUs lógicas`,
+      `${data.system ?? ""} ${data.release ?? ""} • ${data.architecture ?? ""}`.trim()
+    );
+    preencherCardSistema(
+      "Memória",
+      `${data.memory?.used_percent ?? "—"}% em uso`,
+      data.memory ? `${data.memory.available_gb ?? "—"} GB disponíveis de ${data.memory.total_gb ?? "—"} GB` : ""
+    );
+    preencherCardSistema(
+      "Armazenamento",
+      `${data.disk?.used_percent ?? "—"}% em uso`,
+      data.disk ? `${data.disk.free_gb ?? "—"} GB livres de ${data.disk.total_gb ?? "—"} GB` : ""
+    );
+  } catch (error) {
+    preencherCardSistema("CPU", "Indisponível", "Não foi possível consultar /system");
+    preencherCardSistema("Memória", "Indisponível", "Não foi possível consultar /system");
+    preencherCardSistema("Armazenamento", "Indisponível", "Não foi possível consultar /system");
+  }
+}
+
 window.atualizarServicosBeneX = atualizarServicosBeneX;
-document.addEventListener("DOMContentLoaded", atualizarServicosBeneX);
+window.atualizarSistemaBeneX = atualizarSistemaBeneX;
+document.addEventListener("DOMContentLoaded", () => {
+  atualizarServicosBeneX();
+  atualizarSistemaBeneX();
+});
