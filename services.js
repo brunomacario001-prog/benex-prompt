@@ -269,11 +269,32 @@ async function atualizarSistemaBeneX() {
   }
 }
 
+
+function habilitarColarNoTerminal() {
+  document.addEventListener("paste", event => {
+    const paginaTerminal = document.getElementById("terminal");
+    const container = document.getElementById("xterm-container");
+
+    if (!paginaTerminal?.classList.contains("active")) return;
+    if (!container || container.style.display === "none") return;
+    if (typeof ws === "undefined" || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    const texto = event.clipboardData?.getData("text");
+    if (!texto) return;
+
+    event.preventDefault();
+    ws.send(JSON.stringify({ type: "input", data: texto }));
+
+    if (typeof term !== "undefined" && term) term.focus();
+  }, true);
+}
+
 window.atualizarServicosBeneX = atualizarServicosBeneX;
 window.atualizarSistemaBeneX = atualizarSistemaBeneX;
 
 document.addEventListener("DOMContentLoaded", () => {
   aplicarAcabamentoVisual();
+  habilitarColarNoTerminal();
   atualizarServicosBeneX();
   atualizarSistemaBeneX();
   setInterval(atualizarServicosBeneX, 30000);
