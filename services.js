@@ -4,6 +4,114 @@ const SYSTEM_URL = "https://api.benex.net.br/system";
 let ultimoServicos = null;
 let ultimoSistema = null;
 
+function aplicarAcabamentoVisual() {
+  if (document.getElementById("benex-polish")) return;
+
+  const style = document.createElement("style");
+  style.id = "benex-polish";
+  style.textContent = `
+    #sistema .section-title,
+    #servicos .section-title { display: none; }
+
+    .card,
+    .terminal-box {
+      transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+    }
+
+    .card:hover {
+      border-color: #3d444d;
+      box-shadow: 0 8px 24px rgba(0,0,0,.14);
+    }
+
+    #sistema .card {
+      min-height: 118px;
+    }
+
+    .metric-value {
+      margin: 4px 0 10px;
+      color: #f0f6fc;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+
+    .metric-sub {
+      color: #8b949e;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .metric-bar {
+      height: 7px;
+      overflow: hidden;
+      background: #21262d;
+      border-radius: 999px;
+      margin-top: 12px;
+    }
+
+    .metric-bar > span {
+      display: block;
+      height: 100%;
+      background: #3fb950;
+      border-radius: inherit;
+      transition: width .3s ease;
+    }
+
+    .metric-bar.warn > span { background: #d29922; }
+    .metric-bar.danger > span { background: #f85149; }
+
+    #servicos .service-row {
+      align-items: center;
+      gap: 18px;
+      min-height: 44px;
+    }
+
+    #servicos .service-row > span:first-child {
+      color: #f0f6fc;
+      font-weight: 600;
+    }
+
+    #servicos .service-row > span:last-child {
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    #resumo-status {
+      line-height: 1.6;
+      margin-bottom: 0;
+    }
+
+    @media(max-width:800px) {
+      #servicos .service-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      #servicos .service-row > span:last-child {
+        white-space: normal;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function atualizarBarraMetrica(card, percentual) {
+  if (!card || percentual === undefined || percentual === null) return;
+
+  let bar = card.querySelector(".metric-bar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "metric-bar";
+    bar.innerHTML = "<span></span>";
+    card.appendChild(bar);
+  }
+
+  const valor = Math.max(0, Math.min(100, Number(percentual) || 0));
+  bar.className = "metric-bar" + (valor >= 90 ? " danger" : valor >= 75 ? " warn" : "");
+  bar.querySelector("span").style.width = `${valor}%`;
+}
+
 function localizarLinhaServico(nome) {
   return [...document.querySelectorAll("#servicos .service-row")]
     .find(row => row.querySelector("span")?.textContent.trim() === nome);
@@ -105,13 +213,27 @@ function localizarCardSistema(titulo) {
     .find(card => card.querySelector("h3")?.textContent.trim() === titulo);
 }
 
-function preencherCardSistema(titulo, texto, detalhe) {
+function preencherCardSistema(titulo, texto, detalhe, percentual = null) {
   const card = localizarCardSistema(titulo);
   if (!card) return;
-  const p = card.querySelector(".muted");
+
+  let p = card.querySelector(".muted");
   if (!p) return;
+
+  p.classList.remove("muted");
+  p.classList.add("metric-value");
   p.textContent = texto;
   card.title = detalhe || "";
+
+  let sub = card.querySelector(".metric-sub");
+  if (!sub) {
+    sub = document.createElement("div");
+    sub.className = "metric-sub";
+    p.insertAdjacentElement("afterend", sub);
+  }
+  sub.textContent = detalhe || "";
+
+  if (percentual !== null) atualizarBarraMetrica(card, percentual);
 }
 
 async function atualizarSistemaBeneX() {
@@ -130,12 +252,14 @@ async function atualizarSistemaBeneX() {
     preencherCardSistema(
       "Memória",
       `${data.memory?.used_percent ?? "—"}% em uso`,
-      data.memory ? `${data.memory.available_gb ?? "—"} GB disponíveis de ${data.memory.total_gb ?? "—"} GB` : ""
+      data.memory ? `${data.memory.available_gb ?? "—"} GB disponíveis de ${data.memory.total_gb ?? "—"} GB` : "",
+      data.memory?.used_percent
     );
     preencherCardSistema(
       "Armazenamento",
       `${data.disk?.used_percent ?? "—"}% em uso`,
-      data.disk ? `${data.disk.free_gb ?? "—"} GB livres de ${data.disk.total_gb ?? "—"} GB` : ""
+      data.disk ? `${data.disk.free_gb ?? "—"} GB livres de ${data.disk.total_gb ?? "—"} GB` : "",
+      data.disk?.used_percent
     );
     atualizarResumoGeral();
   } catch (error) {
@@ -149,6 +273,7 @@ window.atualizarServicosBeneX = atualizarServicosBeneX;
 window.atualizarSistemaBeneX = atualizarSistemaBeneX;
 
 document.addEventListener("DOMContentLoaded", () => {
+  aplicarAcabamentoVisual();
   atualizarServicosBeneX();
   atualizarSistemaBeneX();
   setInterval(atualizarServicosBeneX, 30000);
