@@ -282,14 +282,9 @@ function habilitarColarNoTerminal() {
   const enviarTextoColado = texto => {
     if (!texto) return false;
 
-    if (typeof term !== "undefined" && term && typeof term.paste === "function") {
-      term.paste(texto);
-      term.focus();
-      return true;
-    }
-
     if (typeof ws !== "undefined" && ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "input", data: texto }));
+      if (typeof term !== "undefined" && term) term.focus();
       return true;
     }
 
