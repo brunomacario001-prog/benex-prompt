@@ -21,14 +21,69 @@
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
 <script src="services.js"></script>
 <script>
-const API_URL="https://api.benex.net.br/executar",HEALTH_URL="https://api.benex.net.br/health",WS_URL="wss://api.benex.net.br/terminal",HASH_CORRETO="54313aa1353b7243bc03d3c9699952ab43ae7b96bb790c5c2913bbfb54d9c7f4";
+const API_URL="https://api.benex.net.br/executar",HEALTH_URL="https://api.benex.net.br/health",WS_URL="wss://api.benex.net.br/terminal";
 const auth=document.getElementById("auth"),chave=document.getElementById("chave"),statusEl=document.getElementById("status"),xtermContainer=document.getElementById("xterm-container"),fallback=document.getElementById("fallback"),fallbackOutput=document.getElementById("fallback-output"),fallbackInput=document.getElementById("fallback-input");let tokenAcesso="",diretorioAtual=".",ws=null,term=null,fitAddon=null,terminalIniciado=false;
 function estado(id,texto,classe){const el=document.getElementById(id);if(el){el.textContent=texto;el.className=classe}}
 async function atualizarVisao(){const inicio=performance.now();try{const r=await fetch(HEALTH_URL,{cache:"no-store"});if(!r.ok)throw new Error();const d=await r.json();const ms=Math.round(performance.now()-inicio);estado("api-status",d.status==="ok"?"Online":"Resposta inesperada",d.status==="ok"?"status-ok":"status-warn");document.getElementById("api-detail").textContent=`api.benex.net.br • ${ms} ms`;document.getElementById("resumo-status").textContent="Site e API disponíveis. O estado do terminal será confirmado ao abrir uma sessão."}catch(e){estado("api-status","Falha","status-error");document.getElementById("api-detail").textContent="api.benex.net.br • sem resposta";document.getElementById("resumo-status").textContent="A API BeneX não respondeu à última verificação."}}
 atualizarVisao();setInterval(atualizarVisao,30000);
 document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));btn.classList.add('active');const id=btn.dataset.page;document.getElementById(id).classList.add('active');document.getElementById('page-title').textContent={visao:'Visão Geral',terminal:'Terminal',sistema:'Sistema',servicos:'Serviços'}[id];if(id==='terminal'){setTimeout(()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}chave.focus()},30)}}));
-async function gerarSHA256(texto){const dados=new TextEncoder().encode(texto),hashBuffer=await crypto.subtle.digest("SHA-256",dados);return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,"0")).join("")}
 function mostrarStatus(texto,erro=false){statusEl.textContent=texto;statusEl.className=erro?"erro":""}function ativarFallback(motivo){mostrarStatus(motivo+" Modo HTTP disponível.",true);estado("terminal-status","Desconectado","status-error");xtermContainer.style.display="none";fallback.style.display="block";fallbackInput.focus()}function enviarResize(){if(ws&&ws.readyState===WebSocket.OPEN&&term)ws.send(JSON.stringify({type:"resize",rows:term.rows,cols:term.cols}))}
-function iniciarTerminalWebSocket(){if(terminalIniciado)return;terminalIniciado=true;try{term=new Terminal({cursorBlink:true,convertEol:false,fontFamily:'"Courier New", monospace',fontSize:15,theme:{background:"#161b22",foreground:"#c9d1d9",cursor:"#f0f6fc"}});fitAddon=new FitAddon.FitAddon();term.loadAddon(fitAddon);xtermContainer.style.display="block";term.open(xtermContainer);fitAddon.fit();ws=new WebSocket(WS_URL);ws.onopen=()=>{mostrarStatus("Terminal interativo conectado.");estado("terminal-status","Online","status-ok");enviarResize();term.focus()};ws.onmessage=e=>term.write(e.data);term.onData(data=>{if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",data}))});ws.onerror=()=>ativarFallback("Falha na conexão WebSocket.");ws.onclose=()=>{estado("terminal-status","Desconectado","status-error");if(fallback.style.display!=="block")ativarFallback("Sessão interativa encerrada.")}}catch(e){ativarFallback("Não foi possível iniciar o terminal interativo.")}}
-window.addEventListener("resize",()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}});chave.addEventListener("keydown",async e=>{if(e.key!=="Enter")return;const valor=chave.value;if(!valor)return;if(await gerarSHA256(valor)!==HASH_CORRETO){chave.value="";mostrarStatus("Chave administrativa inválida.",true);return}tokenAcesso=valor;chave.value="";auth.style.display="none";mostrarStatus("Autenticação administrativa concluída. Conectando...");iniciarTerminalWebSocket()});fallbackInput.addEventListener("keydown",async e=>{if(e.key!=="Enter")return;const comando=fallbackInput.value.trim();if(!comando)return;fallbackInput.value="";if(["clear","cls"].includes(comando.toLowerCase())){fallbackOutput.textContent="";return}fallbackOutput.textContent+=`\nHTTP$ ${comando}\n`;try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:tokenAcesso,comando,diretorio:diretorioAtual})}),d=await r.json();if(d.diretorio!==undefined)diretorioAtual=d.diretorio;fallbackOutput.textContent+=(d.saida||d.detail||d.erro||"")+"\n";fallbackOutput.scrollTop=fallbackOutput.scrollHeight}catch(e){fallbackOutput.textContent+="Não foi possível conectar à API BeneX.\n"}});
+function iniciarTerminalWebSocket(){
+  if(terminalIniciado)return;
+  terminalIniciado=true;
+  let autenticado=false;
+  try{
+    term=new Terminal({cursorBlink:true,convertEol:false,fontFamily:'"Courier New", monospace',fontSize:15,theme:{background:"#161b22",foreground:"#c9d1d9",cursor:"#f0f6fc"}});
+    fitAddon=new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    xtermContainer.style.display="block";
+    term.open(xtermContainer);
+    fitAddon.fit();
+    ws=new WebSocket(WS_URL);
+    ws.onopen=()=>ws.send(JSON.stringify({type:"auth",token:tokenAcesso}));
+    ws.onmessage=e=>{
+      if(!autenticado){
+        try{
+          const resposta=JSON.parse(e.data);
+          if(resposta.type!=="auth"||resposta.ok!==true)throw new Error("Autenticação recusada");
+          autenticado=true;
+          mostrarStatus("Terminal interativo conectado.");
+          estado("terminal-status","Online","status-ok");
+          enviarResize();
+          term.focus();
+        }catch(erro){
+          mostrarStatus("Falha na autenticação do terminal.",true);
+          ws.close();
+        }
+        return;
+      }
+      term.write(e.data);
+    };
+    term.onData(data=>{if(autenticado&&ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",data}))});
+    ws.onerror=()=>ativarFallback("Falha na conexão WebSocket.");
+    ws.onclose=()=>{estado("terminal-status","Desconectado","status-error");if(fallback.style.display!=="block")ativarFallback("Sessão interativa encerrada.")};
+  }catch(e){ativarFallback("Não foi possível iniciar o terminal interativo.")}
+}
+window.addEventListener("resize",()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}});chave.addEventListener("keydown",async e=>{
+  if(e.key!=="Enter"||chave.disabled)return;
+  const valor=chave.value;
+  if(!valor)return;
+  chave.disabled=true;
+  mostrarStatus("Validando chave na API BeneX...");
+  try{
+    const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:valor,comando:"benex version",diretorio:"."})});
+    if(!r.ok){
+      chave.value="";
+      mostrarStatus(r.status===401?"Chave administrativa inválida.":"Não foi possível autenticar no terminal.",true);
+      return;
+    }
+    tokenAcesso=valor;
+    chave.value="";
+    auth.style.display="none";
+    mostrarStatus("Autenticação concluída. Conectando...");
+    iniciarTerminalWebSocket();
+  }catch(erro){mostrarStatus("API BeneX indisponível. Tente novamente.",true)}
+  finally{chave.disabled=false}
+});
+fallbackInput.addEventListener("keydown",async e=>{if(e.key!=="Enter")return;const comando=fallbackInput.value.trim();if(!comando)return;fallbackInput.value="";if(["clear","cls"].includes(comando.toLowerCase())){fallbackOutput.textContent="";return}fallbackOutput.textContent+=`\nHTTP$ ${comando}\n`;try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:tokenAcesso,comando,diretorio:diretorioAtual})}),d=await r.json();if(d.diretorio!==undefined)diretorioAtual=d.diretorio;fallbackOutput.textContent+=(d.saida||d.detail||d.erro||"")+"\n";fallbackOutput.scrollTop=fallbackOutput.scrollHeight}catch(e){fallbackOutput.textContent+="Não foi possível conectar à API BeneX.\n"}});
 </script></body></html>
