@@ -22,16 +22,80 @@
 <script src="services.js"></script>
 <script>
 const API_URL="https://api.benex.net.br/executar",HEALTH_URL="https://api.benex.net.br/health",WS_URL="wss://api.benex.net.br/terminal";
-const auth=document.getElementById("auth"),chave=document.getElementById("chave"),statusEl=document.getElementById("status"),xtermContainer=document.getElementById("xterm-container"),fallback=document.getElementById("fallback"),fallbackOutput=document.getElementById("fallback-output"),fallbackInput=document.getElementById("fallback-input");let tokenAcesso="",diretorioAtual=".",ws=null,term=null,fitAddon=null,terminalIniciado=false;
+const auth=document.getElementById("auth"),chave=document.getElementById("chave"),statusEl=document.getElementById("status"),xtermContainer=document.getElementById("xterm-container"),fallback=document.getElementById("fallback"),fallbackOutput=document.getElementById("fallback-output"),fallbackInput=document.getElementById("fallback-input");let tokenAcesso="",diretorioAtual=".",ws=null,term=null,fitAddon=null,terminalIniciado=false,wsAutenticado=false;
 function estado(id,texto,classe){const el=document.getElementById(id);if(el){el.textContent=texto;el.className=classe}}
 async function atualizarVisao(){const inicio=performance.now();try{const r=await fetch(HEALTH_URL,{cache:"no-store"});if(!r.ok)throw new Error();const d=await r.json();const ms=Math.round(performance.now()-inicio);estado("api-status",d.status==="ok"?"Online":"Resposta inesperada",d.status==="ok"?"status-ok":"status-warn");document.getElementById("api-detail").textContent=`api.benex.net.br • ${ms} ms`;document.getElementById("resumo-status").textContent="Site e API disponíveis. O estado do terminal será confirmado ao abrir uma sessão."}catch(e){estado("api-status","Falha","status-error");document.getElementById("api-detail").textContent="api.benex.net.br • sem resposta";document.getElementById("resumo-status").textContent="A API BeneX não respondeu à última verificação."}}
 atualizarVisao();setInterval(atualizarVisao,30000);
 document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));btn.classList.add('active');const id=btn.dataset.page;document.getElementById(id).classList.add('active');document.getElementById('page-title').textContent={visao:'Visão Geral',terminal:'Terminal',sistema:'Sistema',servicos:'Serviços'}[id];if(id==='terminal'){setTimeout(()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}chave.focus()},30)}}));
-function mostrarStatus(texto,erro=false){statusEl.textContent=texto;statusEl.className=erro?"erro":""}function ativarFallback(motivo){mostrarStatus(motivo+" Modo HTTP disponível.",true);estado("terminal-status","Desconectado","status-error");xtermContainer.style.display="none";fallback.style.display="block";fallbackInput.focus()}function enviarResize(){if(ws&&ws.readyState===WebSocket.OPEN&&term)ws.send(JSON.stringify({type:"resize",rows:term.rows,cols:term.cols}))}
+function mostrarStatus(texto,erro=false){statusEl.textContent=texto;statusEl.className=erro?"erro":""}function ativarFallback(motivo){mostrarStatus(motivo+" Modo HTTP disponível.",true);estado("terminal-status","Desconectado","status-error");xtermContainer.style.display="none";fallback.style.display="block";fallbackInput.focus()}function enviarResize(){if(wsAutenticado&&ws&&ws.readyState===WebSocket.OPEN&&term)ws.send(JSON.stringify({type:"resize",rows:term.rows,cols:term.cols}))}
 function iniciarTerminalWebSocket(){
   if(terminalIniciado)return;
   terminalIniciado=true;
-  let autenticado=false;
+  let tentativas=0,houveQueda=false;
+  function conectar(){
+    let socket,tempoConexao,tempoAuth,keepalive,authRejeitada=false;
+    function limparTimers(){clearTimeout(tempoConexao);clearTimeout(tempoAuth);clearInterval(keepalive)}
+    try{
+      socket=new WebSocket(WS_URL);
+      ws=socket;
+      tempoConexao=setTimeout(()=>{if(socket.readyState===WebSocket.CONNECTING)socket.close()},70000);
+      socket.onopen=()=>{
+        clearTimeout(tempoConexao);
+        socket.send(JSON.stringify({type:"auth",token:tokenAcesso}));
+        tempoAuth=setTimeout(()=>{if(!wsAutenticado)socket.close()},12000);
+      };
+      socket.onmessage=e=>{
+        if(socket!==ws)return;
+        if(!wsAutenticado){
+          try{
+            const resposta=JSON.parse(e.data);
+            if(resposta.type!=="auth"||resposta.ok!==true)throw new Error("Autenticação recusada");
+            clearTimeout(tempoAuth);
+            wsAutenticado=true;
+            tentativas=0;
+            if(houveQueda)term.write("\r\n[Nova sessão conectada. Confira o diretório com pwd.]\r\n");
+            mostrarStatus(houveQueda?"Nova sessão conectada; confira seu diretório e arquivos temporários.":"Terminal interativo conectado.");
+            estado("terminal-status","Online","status-ok");
+            houveQueda=false;
+            enviarResize();
+            term.focus();
+            keepalive=setInterval(()=>{if(socket===ws&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:"keepalive"}))},25000);
+          }catch(erro){authRejeitada=true;socket.close()}
+          return;
+        }
+        term.write(e.data);
+      };
+      socket.onerror=()=>{if(socket.readyState!==WebSocket.CLOSED)socket.close()};
+      socket.onclose=e=>{
+        if(socket!==ws)return;
+        limparTimers();
+        wsAutenticado=false;
+        if(authRejeitada||e.code===1008){
+          tokenAcesso="";
+          auth.style.display="flex";
+          xtermContainer.style.display="none";
+          term.dispose();
+          term=null;
+          fitAddon=null;
+          xtermContainer.replaceChildren();
+          terminalIniciado=false;
+          mostrarStatus("Sessão não autorizada. Digite sua chave novamente.",true);
+          estado("terminal-status","Desconectado","status-error");
+          chave.focus();
+          return;
+        }
+        houveQueda=true;
+        if(tentativas<5){
+          const espera=Math.min(1000*2**tentativas,10000);
+          tentativas++;
+          mostrarStatus(`Conexão interrompida. Reconectando (${tentativas}/5)...`);
+          estado("terminal-status","Reconectando","status-warn");
+          term.write("\r\n[Conexão interrompida. Reabrindo sessão...]\r\n");
+          setTimeout(conectar,espera);
+        }else ativarFallback("Não foi possível restabelecer a sessão interativa.");
+      };
+    }catch(erro){ativarFallback("Não foi possível iniciar o terminal interativo.")}
+  }
   try{
     term=new Terminal({cursorBlink:true,convertEol:false,fontFamily:'"Courier New", monospace',fontSize:15,theme:{background:"#161b22",foreground:"#c9d1d9",cursor:"#f0f6fc"}});
     fitAddon=new FitAddon.FitAddon();
@@ -39,29 +103,8 @@ function iniciarTerminalWebSocket(){
     xtermContainer.style.display="block";
     term.open(xtermContainer);
     fitAddon.fit();
-    ws=new WebSocket(WS_URL);
-    ws.onopen=()=>ws.send(JSON.stringify({type:"auth",token:tokenAcesso}));
-    ws.onmessage=e=>{
-      if(!autenticado){
-        try{
-          const resposta=JSON.parse(e.data);
-          if(resposta.type!=="auth"||resposta.ok!==true)throw new Error("Autenticação recusada");
-          autenticado=true;
-          mostrarStatus("Terminal interativo conectado.");
-          estado("terminal-status","Online","status-ok");
-          enviarResize();
-          term.focus();
-        }catch(erro){
-          mostrarStatus("Falha na autenticação do terminal.",true);
-          ws.close();
-        }
-        return;
-      }
-      term.write(e.data);
-    };
-    term.onData(data=>{if(autenticado&&ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",data}))});
-    ws.onerror=()=>ativarFallback("Falha na conexão WebSocket.");
-    ws.onclose=()=>{estado("terminal-status","Desconectado","status-error");if(fallback.style.display!=="block")ativarFallback("Sessão interativa encerrada.")};
+    term.onData(data=>{if(wsAutenticado&&ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:"input",data}))});
+    conectar();
   }catch(e){ativarFallback("Não foi possível iniciar o terminal interativo.")}
 }
 window.addEventListener("resize",()=>{if(fitAddon&&term){fitAddon.fit();enviarResize()}});chave.addEventListener("keydown",async e=>{
